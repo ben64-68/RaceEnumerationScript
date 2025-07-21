@@ -23,7 +23,7 @@ def run_ping_sweep(inscope_file, current_date, outscope_file):
     start = datetime.now()
     subprocess.run(cmd, shell=True)
     end = datetime.now()
-    log_command(cmd, start, end, inscope_file, "Completed")
+    log_command(cmd, start, end, inscope_file, "Success" if result.returncode == 0 else "Failed")
     return f"{output_file_base}.gnmap"
 
 def extract_alive_hosts(ping_output_file):
@@ -49,7 +49,7 @@ def run_common_ports_scan(alive_file, current_date, outscope_file):
     start = datetime.now()
     subprocess.run(cmd, shell=True)
     end = datetime.now()
-    log_command(cmd, start, end, alive_file, "Completed")
+    log_command(cmd, start, end, alive_file, "Success" if result.returncode == 0 else "Failed")
 
 def separate_nmap_hosts(nmap_output_path):
     service_ports = {
@@ -174,7 +174,7 @@ def run_nxc_smb_enum(args):
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, smb_ip, "Success" if result.returncode == 0 else "Failed")
         
         cmd = f"[ \"$(grep 'sntp-ms' Scans/NXC/Timeroast_Check.txt | awk 'BEGIN {{OFS=\":\"}} {{print $2, $5}}')\" ] && grep 'sntp-ms' Scans/NXC/Timeroast_Check.txt | awk 'BEGIN {{OFS=\":\"}} {{print $2, $5}}' > Finds/Timeroast.txt"
         subprocess.run(cmd, shell=True)
@@ -193,21 +193,21 @@ def run_nxc_ldap_enum(args):
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, ldap_ip, "Success" if result.returncode == 0 else "Failed")
 
         cmd = f"nxc ldap {ldap_ip} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} --active-users | tee ActiveDirectory/{args.domain}_Active_Users_raw"
         print(f"[*] Running: {cmd}")
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, ldap_ip, "Success" if result.returncode == 0 else "Failed")
         
         cmd = f"nxc ldap {ldap_ip} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} --asreproast ActiveDirectory/{args.domain}_Asreproast_scan"
         print(f"[*] Running: {cmd}")
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, ldap_ip, "Success" if result.returncode == 0 else "Failed")
         
         cmd = f"[ \"$(grep 'krb5asrep' ActiveDirectory/{args.domain}_Asreproast_scan | awk '{{print $5}}')\" ] && grep 'krb5asrep' ActiveDirectory/{args.domain}_Asreproast_scan | awk '{{print $5}}' > Finds/Asreproast.txt"
         subprocess.run(cmd, shell=True)
@@ -217,7 +217,7 @@ def run_nxc_ldap_enum(args):
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, ldap_ip, "Success" if result.returncode == 0 else "Failed")
         
         cmd = f"[ \"$(grep 'krb5tgs' ActiveDirectory/{args.domain}_Kerberoast_scan | awk '{{print $5}}')\" ] && grep 'krb5tgs' ActiveDirectory/{args.domain}_Kerberoast_scan | awk '{{print $5}}' > Finds/kerberoast.txt"
         subprocess.run(cmd, shell=True)
@@ -227,11 +227,17 @@ def run_nxc_ldap_enum(args):
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
-        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        log_command(cmd, start, end, ldap_ip, "Success" if result.returncode == 0 else "Failed")
         
-        cmd = f"nxc ldap {ldap_ip} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} -M ldap-checker | tee Scans/NXC/{args.domain}_BindingCheck.txt"
+        cmd = f"[ \"$(awk '$NF+0 > 0' Scans/NXC/{args.domain}_MAQ.txt)\" ] && awk '$NF+0 > 0' Scans/NXC/{args.domain}_MAQ.txt > Finds/MAQnot0.txt"
+        subprocess.run(cmd, shell=True)
+        
+        cmd = f"nxc ldap {host_file} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} -M ldap-checker | tee Scans/NXC/{args.domain}_BindingCheck.txt"
         print(f"[*] Running: {cmd}")
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
         end = datetime.now()
         log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        
+        cmd = f"[ \"$(egrep 'LDAP signing NOT enforced|LDAPS channel binding is set to: Never' Scans/NXC/{args.domain}_BindingCheck.txt)\" ] && egrep 'LDAP signing NOT enforced|LDAPS channel binding is set to: Never' Scans/NXC/{args.domain}_BindingCheck.txt > Finds/LDAPSigningFalse.txt"
+        subprocess.run(cmd, shell=True)
