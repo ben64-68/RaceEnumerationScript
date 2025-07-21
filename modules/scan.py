@@ -8,6 +8,7 @@ def run(args):
     extract_alive_hosts(ping_output)
     run_common_ports_scan("AliveHosts.txt", current_date, args.outscope_file)
     separate_nmap_hosts(f"Scans/Nmap/nmap_common_{current_date}.gnmap")
+    run_nxc_anonsmb_checks()
     run_nxc_checks()
     run_nxc_deafult_creds_checks()
     if all([args.domain_user, args.domain_pass, args.domain]):
@@ -82,7 +83,6 @@ def separate_nmap_hosts(nmap_output_path):
 
 def run_nxc_checks():
     checks = [
-        ("smb", "Scans/NXC/AnonSMB.txt"),
         ("nfs", "Scans/NXC/NFS.txt"),
         ("rdp", "Scans/NXC/AnonRDP.txt"),
         ("ldap", "Scans/NXC/AnonLDAP.txt")
@@ -98,6 +98,30 @@ def run_nxc_checks():
             end = datetime.now()
             log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
 
+def run_nxc_anonsmb_checks():
+    host_file = f"Hosts/{service}Hosts.txt"
+    if os.path.exists(host_file) and os.path.getsize(host_file) > 0:
+        cmd = f"nxc smb {host_file} --users | tee Scans/NXC/AnonSMBUserCheck.txt"
+        print(f"[*] Running: {cmd}")
+        start = datetime.now()
+        result = subprocess.run(cmd, shell=True)
+        end = datetime.now()
+        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        
+        cmd = f"nxc smb {host_file} -u '' -p '' --shares | tee Scans/NXC/nullSMBshareCheck.txt"
+        print(f"[*] Running: {cmd}")
+        start = datetime.now()
+        result = subprocess.run(cmd, shell=True)
+        end = datetime.now()
+        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        
+        cmd = f"nxc smb {host_file} -u 'a' -p '' --shares | tee Scans/NXC/nullSMBshareCheck.txt"
+        print(f"[*] Running: {cmd}")
+        start = datetime.now()
+        result = subprocess.run(cmd, shell=True)
+        end = datetime.now()
+        log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
+        
 def run_nxc_deafult_creds_checks():
     auth_checks = [
         ("ftp", "anonymous", "anonymous", "Scans/NXC/AnonFTP.txt"),
