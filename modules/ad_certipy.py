@@ -5,7 +5,24 @@ import glob
 import shutil
 from datetime import datetime
 from general_utils import log_command
+import re
 
+def describe_esc(esc):
+    descriptions = {
+        "ESC1:": f"\033[91mEnrollee supplies subject and template allows client authentication.\033[0m",
+        "ESC2:": f"\033[91mTemplate can be used for any purpose.\033[0m",
+        "ESC3:": f"\033[91mTemplate has Certificate Request Agent EKU set.\033[0m",
+        "ESC4:": f"\033[91mUser has enrollment rights and SAN control (e.g., spoof DC).\033[0m",
+        "ESC5:": f"\033[91muser can modify certificate template access control lists (e.g., Role Based Constrained Delegation RBCD)\033[0m",
+        "ESC6:": f"\033[91mVulnerable if EDITF_ATTRIBUTESUBJECTALTNAME2 flag is set (patched in May 2022 due to CVE-2022-26923)\033[0m",
+        "ESC7:": f"\033[91mVulnerable if EDITF_ATTRIBUTESUBJECTALTNAME2 can be modified (need administrator CA rights or ManageCA rights over CA)\033[0m",
+        "ESC8:": f"\033[91mVulnerable web enrollment endpoint anbd at least one certificate template enabled that allows domain computer enrollment and client authentication\033[0m",
+        "ESC9:": f"\033[91mDangerous permissions allow tampering with template ACLs.\033[0m",
+        "ESC10:": f"\033[91mAbuses StrongCertificateBindingEnforcement or CertificateMappingMethods registry keys and spoofs UPN\033[0m",
+        "ESC11:": f"\033[91mAbuses IF_ENFORCEENCRYPTICERTREQUEST between client and CA\033[0m"
+    }
+    return descriptions.get(esc, "Unknown vulnerability.")
+    
 def run_certipy_find(args):
     required_args = [args.domain_user, args.domain_pass, args.domain, args.dc_ip]
     if not all(required_args):

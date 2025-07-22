@@ -25,6 +25,6 @@ def run(args):
 
     if esc_key in esc_handlers:
         print(f"[+] Running handler for {esc_key}...")
-        esc_handlers[esc_key](args, certipy_path, selected_template, selected_admin)
+        esc_handlers[esc_key](args, selected_template, selected_admin)
     else:
         print(f"[-] No handler defined for {esc_key}")

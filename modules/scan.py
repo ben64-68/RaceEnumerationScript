@@ -16,13 +16,19 @@ def run(args):
         run_nxc_ssh(args)
         run_nxc_smb_enum(args)
         run_nxc_ldap_enum(args)
+    
+    cmd = f"grep 'signing:False' Scans/NXC/*SMB* | sort -u > Finds/smbSigningFalse.txt"
+    subprocess.run(cmd, shell=True)
+    
+    cmd = f"grep 'SMBv1:True' Scans/NXC/*SMB* | sort -u > Finds/smbv1.txt"
+    subprocess.run(cmd, shell=True)
 
 def run_ping_sweep(inscope_file, current_date, outscope_file):
     output_file_base = f"Scans/Nmap/nmap_ping_{current_date}"
     cmd = f"nmap -sn --source-port 53 -T5 -iL {inscope_file} --excludefile {outscope_file} -oA {output_file_base}"
     print(f"[*] Running: {cmd}")
     start = datetime.now()
-    subprocess.run(cmd, shell=True)
+    result = subprocess.run(cmd, shell=True)
     end = datetime.now()
     log_command(cmd, start, end, inscope_file, "Success" if result.returncode == 0 else "Failed")
     return f"{output_file_base}.gnmap"
@@ -48,7 +54,7 @@ def run_common_ports_scan(alive_file, current_date, outscope_file):
     cmd = f"nmap --source-port 53 --open -Pn -T5 -p {ports} -iL {alive_file} --excludefile {outscope_file} -oA {output_file_base}"
     print(f"[*] Running: {cmd}")
     start = datetime.now()
-    subprocess.run(cmd, shell=True)
+    result = subprocess.run(cmd, shell=True)
     end = datetime.now()
     log_command(cmd, start, end, alive_file, "Success" if result.returncode == 0 else "Failed")
 
@@ -99,7 +105,7 @@ def run_nxc_checks():
             log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
 
 def run_nxc_anonsmb_checks():
-    host_file = f"Hosts/{service}Hosts.txt"
+    host_file = f"Hosts/smbHosts.txt"
     if os.path.exists(host_file) and os.path.getsize(host_file) > 0:
         cmd = f"nxc smb {host_file} --users | tee Scans/NXC/AnonSMBUserCheck.txt"
         print(f"[*] Running: {cmd}")
@@ -115,7 +121,7 @@ def run_nxc_anonsmb_checks():
         end = datetime.now()
         log_command(cmd, start, end, host_file, "Success" if result.returncode == 0 else "Failed")
         
-        cmd = f"nxc smb {host_file} -u 'a' -p '' --shares | tee Scans/NXC/nullSMBshareCheck.txt"
+        cmd = f"nxc smb {host_file} -u 'nul' -p '' --shares | tee Scans/NXC/nullSMBshareCheck.txt"
         print(f"[*] Running: {cmd}")
         start = datetime.now()
         result = subprocess.run(cmd, shell=True)
@@ -208,7 +214,7 @@ def run_nxc_ldap_enum(args):
     host_file = f"Hosts/{args.domain}_{args.domain_user}_PositiveLDAPHosts.txt"
     cmd = f"grep '+' {ldap_file} | awk '{{print $2}}' > {host_file}"
     subprocess.run(cmd, shell=True)
-    cmd = f"head -n 1 {host_file}"
+    cmd = f"grep '(domain:{args.domain})' {ldap_file} | head -n 1 | awk '{{print $2}}'"
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     ldap_ip = result.stdout.strip()
     if os.path.exists(host_file) and os.path.getsize(host_file) > 0:

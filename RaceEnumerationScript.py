@@ -17,7 +17,7 @@ def main():
     parser.add_argument("-p", dest="domain_pass", help="Domain password")
     parser.add_argument("-d", dest="domain", help="Domain name")
     parser.add_argument("--dc-ip", dest="dc_ip", help="IP address of the Domain Controller")
-    parser.add_argument("--dc-hostname", dest="dc_hostname", help="Hostname of the Domain Controller")
+    parser.add_argument("--dc-hostname", dest="dc_hostname", help="Hostname of the Domain Controller (just hostname not FQDN)")
 
     args = parser.parse_args()
 
