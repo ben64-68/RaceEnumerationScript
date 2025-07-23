@@ -5,7 +5,6 @@ from general_utils import log_command, current_date
 def run_ad_exploit(args):
     selected_template = ad_certipy.find_esc_vulns("ActiveDirectory/ADCS")
     selected_admin = ad_bloodhound.get_domain_admins_from_bloodhound("ActiveDirectory/Bloodhound")
-    userSID = ad_bloodhound.get_user_sid("ActiveDirectory/Bloodhound",args.domain_user)
     target = None
     with open(f"ActiveDirectory/ADCS/{current_date}_FindResults.txt") as f:
         for line in f:
