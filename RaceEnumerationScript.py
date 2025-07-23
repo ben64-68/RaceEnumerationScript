@@ -1,51 +1,108 @@
 import argparse
-from modules import scan, ad, anon
-from general_utils import check_required_files, create_directories, clean_all, check_tool
+from modules import scan, ad
+import general_utils
+import threading
 
 def main():
-    parser = argparse.ArgumentParser(description="Race Enumeration Script")
+    # ---------- GLOBAL ARGS ----------
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument("-iL", dest="inscope_file", default="Scope/inscope.txt", help="Input file with in-scope IPs. Defaults to Scope/inscope.txt")
+    global_parser.add_argument("-oL", dest="outscope_file", default="Scope/outscope.txt", help="Input file with out-of-scope IPs. Defaults to Scope/outscope.txt")
+    global_parser.add_argument("-u", dest="domain_user", help="Domain username")
+    global_parser.add_argument("-p", dest="domain_pass", help="Domain password")
+    global_parser.add_argument("-d", dest="domain", help="Domain name")
+    global_parser.add_argument("--dc-ip", dest="dc_ip", help="IP address of the Domain Controller")
+    global_parser.add_argument("--dc-hostname", dest="dc_hostname", help="Hostname of the Domain Controller")
 
-    parser.add_argument("-scan", action="store_true", help="Perform scanning")
-    parser.add_argument("-ad", action="store_true", help="Perform Active Directory checks")
-    parser.add_argument("-all", action="store_true", help="Run all checks")
-    parser.add_argument("-clean", action="store_true", help="Delete generated scan and AD data")
+    # ---------- MAIN PARSER ----------
+    parser = argparse.ArgumentParser(description="Race Enumeration Tool", parents=[global_parser])
+    subparsers = parser.add_subparsers(dest="main_cmd", required=True)
 
-    parser.add_argument("-iL", dest="inscope_file", default="Scope/inscope.txt", help="Input file with in-scope IPs")
-    parser.add_argument("-oL", dest="outscope_file", default="Scope/outscope.txt", help="Input file with out-of-scope IPs")
-    
-    parser.add_argument("-u", dest="domain_user", help="Domain username")
-    parser.add_argument("-p", dest="domain_pass", help="Domain password")
-    parser.add_argument("-d", dest="domain", help="Domain name")
-    parser.add_argument("--dc-ip", dest="dc_ip", help="IP address of the Domain Controller")
-    parser.add_argument("--dc-hostname", dest="dc_hostname", help="Hostname of the Domain Controller (just hostname not FQDN)")
+    # ---------- scan COMMAND ----------
+    scan_parser = subparsers.add_parser("scan", parents=[global_parser])
+    scan_subparsers = scan_parser.add_subparsers(dest="scan_cmd", required=True)
 
+    scan_subparsers.add_parser("nmap", help="Run Nmap scans only", parents=[global_parser])
+    scan_subparsers.add_parser("cred", help="Run credentialed NXC checks", parents=[global_parser])
+    scan_subparsers.add_parser("anon", help="Run anonymous NXC checks", parents=[global_parser])
+    scan_subparsers.add_parser("all", help="Run all scan checks", parents=[global_parser])
+
+    # ---------- ad COMMAND ----------
+    ad_parser = subparsers.add_parser("ad", parents=[global_parser])
+    ad_subparsers = ad_parser.add_subparsers(dest="ad_cmd", required=True)
+
+    ad_subparsers.add_parser("enum", help="Run Active Directory enumeration", parents=[global_parser])
+    ad_subparsers.add_parser("exploit", help="Run Active Directory exploit checks", parents=[global_parser])
+    ad_subparsers.add_parser("all", help="Run all AD checks", parents=[global_parser])
+
+    # ---------- other ----------
+    subparsers.add_parser("all", parents=[global_parser])
+    subparsers.add_parser("clean")
+
+    # Parse everything
     args = parser.parse_args()
-
-    if args.clean:
-        clean_all()
     
-    # Check certipy only if -ad or -all
-    if args.ad or args.all:
-        if not check_tool("certipy.pyz"):
-            print("[-] Certipy is required for -ad/-all. Not found.")
-            sys.exit(1)
-        if not check_tool("bloodhound-ce-python"):
-            print("[-] Certipy is required for -ad/-all. Not found.")
-            sys.exit(1)
+    if args.main_cmd == "clean":
+        general_utils.clean_all()
 
-    # Check nxc only if -anon or -all
-    if args.all:
-        if not check_tool("nxc"):
-            print("[-] nxc not found. It's required for anonymous checks.")
-            sys.exit(1)
+    general_utils.check_required_files(args.inscope_file, args.outscope_file)
+    general_utils.create_directories()
+    
+    ProcessedIPfile = f"Scope/ProcessedIpRanges.txt"
+    inscope = general_utils.parse_ip_lines(args.inscope_file)
+    outscope = general_utils.parse_ip_lines(args.outscope_file)
 
-    check_required_files(args.inscope_file, args.outscope_file)
-    create_directories()
+    processed = general_utils.subtract_outscope(inscope, outscope)
+    general_utils.write_processed_ranges(processed, f"{ProcessedIPfile}")
 
-    if args.all or args.scan:
-        scan.run(args)
-    if args.all or args.ad:
-        if not all([args.domain_user, args.domain_pass, args.domain, args.dc_ip, args.dc_hostname]):
-            print("[!] AD enumeration requires -u, -p, -d, --dc-ip, and --dc-hostname")
-        else:
-            ad.run(args)
+    if args.main_cmd == "scan":
+        if args.scan_cmd == "nmap":
+            scan.run_nmap_scans(args, ProcessedIPfile)
+        elif args.scan_cmd == "cred":
+            scan.neccessary_ports(args, ProcessedIPfile)
+            scan.run_nxc_creds_checks(args, ProcessedIPfile)
+        elif args.scan_cmd == "anon":
+            scan.neccessary_ports(args, ProcessedIPfile)
+            scan.run_nxc_anon_checks()
+        elif args.scan_cmd == "all":
+            scan.neccessary_ports(args, ProcessedIPfile)
+            t1 = threading.Thread(target=scan.run_nxc_anon_checks, args=(ProcessedIPfile,))
+            t2 = threading.Thread(target=scan.run_nxc_creds_checks, args=(args,ProcessedIPfile))
+            t3 = threading.Thread(target=scan.run_nmap_scans, args=(args, ProcessedIPfile))
+            t1.start()
+            t2.start()
+            t3.start()
+            t1.join()
+            t2.join()
+            t3.join()
+            
+    elif args.main_cmd == "ad":
+        if args.ad_cmd == "enum":
+            ad.run_ad_enum(args)
+        elif args.ad_cmd == "exploit":
+            ad.run_ad_exploit(args)
+        elif args.ad_cmd == "all":
+            t1 = threading.Thread(target=ad.run_ad_enum, args=(args,))
+            t2 = threading.Thread(target=ad.run_ad_exploit, args=(args,))
+            t1.start()
+            t1.join()
+            t2.start()
+            t2.join()
+
+    elif args.main_cmd == "all":
+        scan.neccessary_ports(args, ProcessedIPfile)
+        t1 = threading.Thread(target=scan.run_nxc_anon_checks, args=(ProcessedIPfile,))
+        t2 = threading.Thread(target=scan.run_nxc_creds_checks, args=(args, ProcessedIPfile))
+        t3 = threading.Thread(target=scan.run_nmap_scans, args=(args,))
+        t4 = threading.Thread(target=ad.run_ad_enum, args=(args,))
+        t5 = threading.Thread(target=ad.run_ad_exploit, args=(args,))
+        t1.start()
+        t2.start()
+        t3.start()
+        t4.start()
+        t4.join()
+        t5.start()
+        t1.join()
+        t2.join()
+        t3.join()
+        t5.join()  

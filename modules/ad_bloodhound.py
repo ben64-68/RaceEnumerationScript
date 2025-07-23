@@ -9,10 +9,10 @@ def run_bloodhound_collection(args):
         return
 
     bhHostname = f"{args.dc_hostname}.{args.domain}"
-    cmd = f"bloodhound-ce-python -c DCOnly -v -d {args.domain} -u {args.domain_user} -p {args.domain_pass} -dc {bhHostname} --auth-method ntlm"
+    cmd = f"bloodhound-ce-python -c DCOnly -v -d {args.domain} -u {args.domain_user} -p {args.domain_pass} -dc {bhHostname}"
     start = datetime.now()
     print(f"\033[92m[*] Running: {cmd}\033[0m")
-    result = subprocess.run(cmd, shell=True)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     end = datetime.now()
     log_command(cmd, start, end, bhHostname, "Success" if result.returncode == 0 else "Failed")
 
@@ -22,7 +22,6 @@ def run_bloodhound_collection(args):
     for json_file in glob.glob("*.json"):
         try:
             shutil.move(json_file, os.path.join(output_dir, os.path.basename(json_file)))
-            print(f"[+] Moved {json_file} to {output_dir}/")
         except Exception as e:
             print(f"[-] Failed to move {json_file}: {e}")
 

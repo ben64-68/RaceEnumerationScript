@@ -1,4 +1,4 @@
-import os, sys, csv, socket, getpass, subprocess, shutil
+import os, sys, csv, socket, getpass, subprocess, shutil, ipaddress
 from datetime import datetime
 from pathlib import Path
 from shutil import which
@@ -64,20 +64,55 @@ def clean_all():
             os.remove("AliveHosts.txt")
         if os.path.exists("nxcGeneratedHosts"):
             os.remove("nxcGeneratedHosts")
+        if os.path.exists("Scope/ProcessedIpRanges.txt"):
+            os.remove("Scope/ProcessedIpRanges.txt")
         print("\033[92m[+] Cleanup completed.\033[0m")
         sys.exit(0)
     else:
         print("[-] Cleanup cancelled.")
         sys.exit(0)
 
-def is_tool_available(tool_name: str) -> bool:
-    return which(tool_name) is not None
+def print_cmd(cmd):
+    print(f"\033[94m[*] Running: {cmd}\n\033[0m")
+    
+def parse_ip_lines(file_path):
+    """Parses lines into ipaddress objects."""
+    entries = set()
+    with open(file_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                if '/' in line:
+                    entries.add(ipaddress.ip_network(line, strict=False))
+                else:
+                    entries.add(ipaddress.ip_address(line))
+            except ValueError:
+                print(f"[-] Invalid IP or CIDR format: {line}")
+    return entries
 
-def check_tool(tool: str, extra_paths: list[str] = None) -> bool:
-    if is_tool_available(tool):
-        return True
-    if extra_paths:
-        for path in extra_paths:
-            if os.path.exists(path):
-                return True
-    return False
+def subtract_outscope(inscope, outscope):
+    """Subtracts outscope entries from inscope entries."""
+    result = set()
+    for i in inscope:
+        if isinstance(i, ipaddress.IPv4Address):
+            if not any(i in o for o in outscope):
+                result.add(i)
+        elif isinstance(i, ipaddress.IPv4Network):
+            temp = [i]
+            for o in outscope:
+                new_temp = []
+                for subnet in temp:
+                    if isinstance(o, ipaddress.IPv4Network) and subnet.overlaps(o):
+                        new_temp.extend(subnet.address_exclude(o))
+                    else:
+                        new_temp.append(subnet)
+                temp = new_temp
+            result.update(temp)
+    return result
+
+def write_processed_ranges(entries, output_file):
+    with open(output_file, "w") as f:
+        for e in sorted(entries, key=lambda x: str(x)):
+            f.write(f"{e}\n")
