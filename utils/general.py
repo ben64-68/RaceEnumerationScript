@@ -1,6 +1,7 @@
-import os, sys, getpass, subprocess, shutil, ipaddress
+import os, sys, getpass, subprocess, shutil, ipaddress, socket, re
 from datetime import datetime
 from pathlib import Path
+from utils import commands
 
 # Init logging file
 localusername = getpass.getuser()
@@ -124,3 +125,61 @@ def check_ip(ip, scope_file):
         return False
 
     return False
+
+def write_valid_dcs(domain, scope):
+    hostnames = get_dc_hostnames(domain)
+    resolved = resolve_hostnames_to_ips(hostnames, domain)
+    output_file = f"Hosts/{domain}_DCs.txt"
+    with open(output_file, "w") as f:
+        for hostname, ips in resolved.items():
+            for ip in ips:
+                if check_ip(ip, scope):
+                    f.write(f"{hostname}:{ip}\n")
+
+def get_dc_hostnames(domain):
+    cmd = f"nslookup -type=SRV _ldap._tcp.dc._msdcs.{domain}"
+    print(f"\033[90m [*] Running: {cmd}\033[0m")
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    hostnames = []
+    for line in result.stdout.splitlines():
+        match = re.search(r'\s+service\s+=\s+\d+\s+\d+\s+\d+\s+([\w\.-]+)\.', line)
+        if match:
+            fqdn = match.group(1).strip()
+            hostname = fqdn.split('.')[0]
+            if hostname:
+                hostnames.append(hostname)
+    return hostnames
+
+def resolve_hostnames_to_ips(hostnames, domain):
+    resolved = {}
+    for hostname in hostnames:
+        try:
+            fqdn = f"{hostname}.{domain}"
+            ips = socket.gethostbyname_ex(fqdn)[2]
+            resolved[hostname] = ips
+        except socket.gaierror:
+            resolved[hostname] = []
+    return resolved
+
+def populate_and_write_dcs(domain, scope_file):
+    hostnames = get_dc_hostnames(domain)
+    if not hostnames:
+        print("[-] No DC hostnames found.")
+        return None, None
+
+    resolved = resolve_hostnames_to_ips(hostnames, domain)
+    output_file = f"Hosts/{domain}_DCs.txt"
+    first_ip, first_hostname = None, None
+
+    with open(output_file, "w") as f:
+        for hostname, ips in resolved.items():
+            for ip in ips:
+                if check_ip(ip, scope_file):
+                    f.write(f"{hostname}:{ip}\n")
+                    if first_ip is None:
+                        first_ip, first_hostname = ip, hostname
+
+    if first_ip is None:
+        print("[-] No in-scope DC IPs found.")
+
+    return first_ip, first_hostname

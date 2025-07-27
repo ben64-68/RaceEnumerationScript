@@ -42,7 +42,7 @@ def run_nmap_scans(args):
 def run_ping_sweep(inscope_file, current_date, outscope_file):
     output_file_base = f"Scans/Nmap/nmap_ping_{current_date}"
     cmd = f"nmap -sn --source-port 53 -T5 -iL {inscope_file} --excludefile {outscope_file} -oA {output_file_base}"
-    commands.single_command(cmd, inscope_file, "white")
+    commands.single_command(cmd, inscope_file, "bright_black")
     return f"{output_file_base}.gnmap"
 
 def extract_alive_hosts(ping_output_file):
@@ -57,11 +57,11 @@ def check_nxc_smb_vulns():
 
 def run_needed_ports_scan(alive_file, current_date, outscope_file):
     cmd = f"nmap --source-port 53 --open -Pn -T4 -p 22,389,445,636,1433,2049 -iL {alive_file} --excludefile {outscope_file} -oA Scans/Nmap/nmap_required_{current_date}"
-    commands.single_command(cmd, alive_file, "white")
+    commands.single_command(cmd, alive_file, "bright_black")
     
 def run_common_ports_scan(alive_file, current_date, outscope_file):
     cmd = f"nmap --source-port 53 --open -Pn -T4 -p 20,21,22,23,25,53,80,88,111,135,137,138,139,389,443,445,636,6379,8000,8008,8080,8181,8443,8888,9000,1099,1337,1433,2049,3306,5000,6132,7000 -iL {alive_file} --excludefile {outscope_file} -oA Scans/Nmap/nmap_common_{current_date}"
-    commands.single_command(cmd, alive_file, "white")
+    commands.single_command(cmd, alive_file, "bright_black")
 
 def separate_nmap_hosts(nmap_output_path):
     service_ports = {
@@ -129,8 +129,7 @@ def run_nxc_smb_enum(args):
     host_file = f"Hosts/{args.domain}_{args.domain_user}_PositiveSMBHosts.txt"
     extract_cmd = f"grep '+' {smb_file} | awk '{{print $2}}' > {host_file}"
     proc = subprocess.Popen(extract_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    result = subprocess.Popen(f"head -n 1 {host_file} >> Scans/NXC/tempSMBIP.txt", shell=True)
-    smb_ip = f"Scans/NXC/tempSMBIP.txt"
+    smb_ip = args.dc_ip
     
     cmds = [
         f"nxc smb {host_file} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} --shares --generate-hosts-file nxcGeneratedHosts >> Scans/NXC/{args.domain}_{args.domain_user}_SMB_Shares.txt",
@@ -149,12 +148,7 @@ def run_nxc_ldap_enum(args):
     host_file = f"Hosts/{args.domain}_{args.domain_user}_PositiveLDAPHosts.txt"
     extract_cmd = f"grep '+' {ldap_file} | awk '{{print $2}}' > {host_file}"
     proc = subprocess.Popen(extract_cmd, shell=True)
-    host_file2 = f"Hosts/{args.domain}_{args.domain_user}_PositiveLDAPHostsMatchingDomain.txt"
-    extract_cmd = f"grep '{args.domain}' | grep '+' {ldap_file} | awk '{{print $2}}' > {host_file2}"
-    proc = subprocess.Popen(extract_cmd, shell=True)
-    proc.wait()
-    result = subprocess.Popen(f" head -n 1 {host_file2} | awk '{{print $1}}' >> Scans/NXC/tempLDAPIP.txt", shell=True)
-    ldap_ip = f"Scans/NXC/tempLDAPIP.txt"
+    ldap_ip = args.dc_ip
 
     cmds = [
         f"nxc ldap {ldap_ip} -d {args.domain} -u {args.domain_user} -p {args.domain_pass} --users-export ActiveDirectory/{args.domain}_Users >> Scans/NXC/{args.domain}_{args.domain_user}_Ldap_enum.txt",

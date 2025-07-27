@@ -1,9 +1,12 @@
 from . import ad_certipy, ad_bloodhound
 from utils import general, commands
 
-def run_ad_exploit(args):
+current_date = general.current_date
+
+def run_ad_certipy(args):
+    ad_certipy.run_certipy_find(args)
     selected_template = ad_certipy.find_esc_vulns("ActiveDirectory/ADCS")
-    selected_admin = ad_bloodhound.get_domain_admins_from_bloodhound("ActiveDirectory/Bloodhound")
+    selected_admin = ad_bloodhound.get_domain_admins_from_bloodhound_or_live(args)
     target = None
     with open(f"ActiveDirectory/ADCS/{current_date}_FindResults.txt") as f:
         for line in f:
@@ -35,7 +38,6 @@ def run_ad_exploit(args):
     else:
         print(f"[-] No handler defined for {esc_key}")
 
-def run_ad_enum(args):
-    ad_certipy.run_certipy_find(args)
+def run_ad_bloodhound(args):
     ad_bloodhound.run_bloodhound_collection(args)
     

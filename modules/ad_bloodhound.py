@@ -1,6 +1,6 @@
 import os, glob, shutil, subprocess
 from datetime import datetime
-from utils import general, commands
+from utils import general, commands, ldap_queries
 
 def run_bloodhound_collection(args):
     required_args = [args.domain_user, args.domain_pass, args.domain, args.dc_hostname]
@@ -10,14 +10,9 @@ def run_bloodhound_collection(args):
 
     bhHostname = f"{args.dc_hostname}.{args.domain}"
     cmd = f"bloodhound-ce-python -c DCOnly -v -d {args.domain} -u {args.domain_user} -p {args.domain_pass} -dc {bhHostname}"
-    start = datetime.now()
-    print(f"\033[92m[*] Running: {cmd}\033[0m")
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    end = datetime.now()
-    log_command(cmd, start, end, bhHostname, "Success" if result.returncode == 0 else "Failed")
+    commands.single_command(cmd, bhHostname, "bright_blue")
 
     output_dir = "ActiveDirectory/Bloodhound"
-    os.makedirs(output_dir, exist_ok=True)
 
     for json_file in glob.glob("*.json"):
         try:
@@ -25,8 +20,31 @@ def run_bloodhound_collection(args):
         except Exception as e:
             print(f"[-] Failed to move {json_file}: {e}")
 
-def get_domain_admins_from_bloodhound(bh_dir):
-    bh_dir = os.path.expanduser(bh_dir.rstrip("/"))
+def get_domain_admins_from_bloodhound_or_live(args):
+    bh_dir = os.path.expanduser("ActiveDirectory/Bloodhound")
+    groups_files = glob.glob(os.path.join(bh_dir, "*groups.json"))
+    users_files = glob.glob(os.path.join(bh_dir, "*users.json"))
+
+    if not groups_files or not users_files:
+        print("\033[93m[!] BloodHound data not found, running live LDAP query...\033[0m")
+        admins = ldap_queries.get_domain_admins(args)
+        if not admins:
+            print("\033[91m[-] No domain admins found via LDAP.\033[0m")
+            return None
+
+        print("\033[92m[+] Domain Admins:\n\033[0m")
+        for i, admin in enumerate(admins, 1):
+            print(f"{i}. {admin}")
+        try:
+            choice = int(input("\nSelect a domain admin to use (by number): "))
+            selected = admins[choice - 1]
+            print(f"\n\033[94m[Selected Domain Admin]\033[0m\n  {selected}\n")
+            return selected
+        except (ValueError, IndexError):
+            print("\033[91m[-] Invalid selection.\033[0m")
+            return None
+
+    # BloodHound data present
     sid_cmd = (
         f"jq -r '.data[] | select(.Properties.name | test(\"(?i)^domain admins@\")) "
         f"| .Members[] | select(.ObjectType == \"User\") | .ObjectIdentifier' {bh_dir}/*groups.json"
@@ -41,7 +59,7 @@ def get_domain_admins_from_bloodhound(bh_dir):
     sids = sid_result.stdout.strip().splitlines()
     domain_admins = []
 
-    print("\033[92m[+] Domain Admins:\n\033[0m")
+    print("\033[92m[+] Domain Admins (from BloodHound):\n\033[0m")
     for sid in sids:
         user_cmd = (
             f"jq -r --arg sid '{sid}' '.data[] | select(.ObjectIdentifier == $sid) "
@@ -58,9 +76,9 @@ def get_domain_admins_from_bloodhound(bh_dir):
     if not domain_admins:
         return None
 
-    choice = input("\nSelect a domain admin to use (by number): ")
     try:
-        selected = domain_admins[int(choice) - 1]
+        choice = int(input("\nSelect a domain admin to use (by number): "))
+        selected = domain_admins[choice - 1]
         print(f"\n\033[94m[Selected Domain Admin]\033[0m\n  {selected}\n")
         return selected
     except (ValueError, IndexError):

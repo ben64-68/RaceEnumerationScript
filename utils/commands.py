@@ -39,7 +39,7 @@ def print_cmd(cmd, color):
     }
 
     color_code = color_codes.get(color.lower(), "97")  # Default to white
-    print(f"\033[{color_code}m[{datetime.now().time()}] [*] Running: {cmd}\033[0m")
+    print(f"\033[{color_code}m [*] Running: {cmd}\033[0m")
     
 def single_command(cmd, host_file, color):
     print_cmd(cmd, color)
