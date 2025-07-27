@@ -1,6 +1,5 @@
 from . import ad_certipy, ad_bloodhound
-from general_utils import log_command, current_date
-
+from utils import general, commands
 
 def run_ad_exploit(args):
     selected_template = ad_certipy.find_esc_vulns("ActiveDirectory/ADCS")

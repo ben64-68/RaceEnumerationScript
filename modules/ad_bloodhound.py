@@ -1,6 +1,6 @@
 import os, glob, shutil, subprocess
 from datetime import datetime
-from general_utils import log_command
+from utils import general, commands
 
 def run_bloodhound_collection(args):
     required_args = [args.domain_user, args.domain_pass, args.domain, args.dc_hostname]

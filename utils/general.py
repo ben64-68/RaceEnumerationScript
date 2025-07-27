@@ -1,11 +1,10 @@
-import os, sys, csv, socket, getpass, subprocess, shutil, ipaddress
+import os, sys, getpass, subprocess, shutil, ipaddress
 from datetime import datetime
 from pathlib import Path
-from shutil import which
 
 # Init logging file
 localusername = getpass.getuser()
-current_date = datetime.now().strftime("%Y-%m-%d")
+current_date = datetime.now().strftime("%d-%m-%Y")
 logs_dir = Path.home() / "/data/logs/scripts"
 logs_dir.mkdir(parents=True, exist_ok=True)
 LOG_FILE = logs_dir / f"EnumerationLog_Race_{current_date}.csv"
@@ -36,21 +35,6 @@ def get_local_ip():
         pass
     return "127.0.0.1"
 
-def log_command(command, start_time, end_time, destination, status):
-    duration = (end_time - start_time).total_seconds()
-    username = getpass.getuser()
-    hostname = socket.gethostname()
-    ip = get_local_ip()
-
-    header = ['Start Time', 'End Time', 'Duration (s)', 'Username', 'Hostname', 'IP', 'Command', 'Destination', 'Status']
-    row = [start_time.isoformat(), end_time.isoformat(), duration, username, hostname, ip, command, destination, status]
-
-    with open(LOG_FILE, mode='a', newline='') as f:
-        writer = csv.writer(f)
-        if f.tell() == 0:
-            writer.writerow(header)
-        writer.writerow(row)
-
 def clean_all():
     warning = "\033[91m[!] WARNING: This will permanently delete 'Hosts/', 'Finds/', 'Scans/', 'ActiveDirectory/', 'nxcGeneratedHosts', and 'AliveHosts.txt'.\033[0m"
     print(warning)
@@ -71,12 +55,9 @@ def clean_all():
     else:
         print("[-] Cleanup cancelled.")
         sys.exit(0)
-
-def print_cmd(cmd):
-    print(f"\033[94m[*] Running: {cmd}\n\033[0m")
     
 def parse_ip_lines(file_path):
-    """Parses lines into ipaddress objects."""
+    #Parses lines into ipaddress objects.
     entries = set()
     with open(file_path, "r") as f:
         for line in f:
@@ -93,7 +74,7 @@ def parse_ip_lines(file_path):
     return entries
 
 def subtract_outscope(inscope, outscope):
-    """Subtracts outscope entries from inscope entries."""
+    #Subtracts outscope entries from inscope entries.
     result = set()
     for i in inscope:
         if isinstance(i, ipaddress.IPv4Address):
@@ -116,3 +97,30 @@ def write_processed_ranges(entries, output_file):
     with open(output_file, "w") as f:
         for e in sorted(entries, key=lambda x: str(x)):
             f.write(f"{e}\n")
+
+def check_ip(ip, scope_file):
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+    except ValueError:
+        return False  # Invalid IP format
+
+    try:
+        with open(scope_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                try:
+                    # Handle individual IP or CIDR
+                    network = ipaddress.ip_network(line, strict=False)
+                    if ip_obj in network:
+                        return True
+                except ValueError:
+                    # If it's not a valid network, try direct IP comparison
+                    if line == ip:
+                        return True
+    except FileNotFoundError:
+        print(f"[!] Scope file not found: {scope_file}")
+        return False
+
+    return False

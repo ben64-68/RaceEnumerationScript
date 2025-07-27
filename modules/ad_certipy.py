@@ -1,11 +1,6 @@
-# modules/ad_certipy.py
-import os
-import subprocess
-import glob
-import shutil
+import os, subprocess, glob, shutil, re
 from datetime import datetime
-from general_utils import log_command, current_date
-import re
+from utils import general, commands
 from modules import ad_bloodhound
 
 def describe_esc(esc):
