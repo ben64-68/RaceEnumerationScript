@@ -28,21 +28,7 @@ def get_domain_admins_from_bloodhound_or_live(args):
     if not groups_files or not users_files:
         print("\033[93m[!] BloodHound data not found, running live LDAP query...\033[0m")
         admins = ldap_queries.get_domain_admins(args)
-        if not admins:
-            print("\033[91m[-] No domain admins found via LDAP.\033[0m")
-            return None
-
-        print("\033[92m[+] Domain Admins:\n\033[0m")
-        for i, admin in enumerate(admins, 1):
-            print(f"{i}. {admin}")
-        try:
-            choice = int(input("\nSelect a domain admin to use (by number): "))
-            selected = admins[choice - 1]
-            print(f"\n\033[94m[Selected Domain Admin]\033[0m\n  {selected}\n")
-            return selected
-        except (ValueError, IndexError):
-            print("\033[91m[-] Invalid selection.\033[0m")
-            return None
+        return admins
 
     # BloodHound data present
     sid_cmd = (

