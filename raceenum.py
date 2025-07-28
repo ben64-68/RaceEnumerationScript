@@ -16,6 +16,7 @@ def main():
     global_parser.add_argument("-d", dest="domain", help="Domain name")
     global_parser.add_argument("--dc-ip", dest="dc_ip", help="IP address of the Domain Controller (will be found automatically if not given)")
     global_parser.add_argument("--dc-hostname", dest="dc_hostname", help="Hostname of the Domain Controller (will be found automatically if not given)")
+    global_parser.add_argument("--rerun", action="store_true", help="Force data collection even if files exist.")
 
     # ---------- MAIN PARSER ----------
     parser = argparse.ArgumentParser(description="Race Enumeration Tool", parents=[global_parser])

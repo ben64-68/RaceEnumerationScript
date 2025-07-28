@@ -1,11 +1,18 @@
+import os
 from . import ad_certipy, ad_bloodhound
 from utils import general, commands
 
 current_date = general.current_date
 
 def run_ad_certipy(args):
-    ad_certipy.run_certipy_find(args)
-    selected_template = ad_certipy.find_esc_vulns("ActiveDirectory/ADCS")
+    output_dir = "ActiveDirectory/ADCS"
+    has_files = any(os.path.isfile(os.path.join(output_dir, f)) for f in os.listdir(output_dir))
+    if has_files and not args.rerun:
+        print(f"[+] Files already exist in {output_dir}. Skipping collection. Use --rerun to force it.")
+    else:
+        ad_certipy.run_certipy_find(args)
+
+    selected_template = ad_certipy.find_esc_vulns(output_dir)
     selected_admin = ad_bloodhound.get_domain_admins_from_bloodhound_or_live(args)
     target = None
     with open(f"ActiveDirectory/ADCS/{current_date}_FindResults.txt") as f:
