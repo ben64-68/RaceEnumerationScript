@@ -7,7 +7,7 @@ def log_command(command, start_time, end_time, destination, status):
     duration = (end_time - start_time).total_seconds()
     username = getpass.getuser()
     hostname = socket.gethostname()
-    ip = general.get_local_ip()
+    ip = general.get_local_ip_auto()
 
     header = ['Start Time', 'End Time', 'Duration (s)', 'Username', 'Hostname', 'IP', 'Command', 'Destination', 'Status']
     row = [start_time.isoformat(), end_time.isoformat(), duration, username, hostname, ip, command, destination, status]
@@ -39,7 +39,7 @@ def print_cmd(cmd, color):
     }
 
     color_code = color_codes.get(color.lower(), "97")  # Default to white
-    print(f"\033[{color_code}m [*] Running: {cmd}\033[0m")
+    print(f"\033[{color_code}m[*] Running: {cmd}\033[0m")
     
 def single_command(cmd, host_file, color):
     print_cmd(cmd, color)
