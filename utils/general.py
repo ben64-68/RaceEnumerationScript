@@ -169,7 +169,7 @@ def write_valid_dcs(domain, scope):
 
 def get_dc_hostnames(domain):
     cmd = f"nslookup -type=SRV _ldap._tcp.dc._msdcs.{domain}"
-    print(f"\033[90m [*] Running: {cmd}\033[0m")
+    print(f"\033[90m[*] Running: {cmd}\033[0m")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     hostnames = []
     for line in result.stdout.splitlines():

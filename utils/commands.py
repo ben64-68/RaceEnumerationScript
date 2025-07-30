@@ -1,4 +1,4 @@
-import csv, socket, getpass, subprocess, ipaddress, threading
+import csv, socket, getpass, subprocess, ipaddress, threading, signal, os
 from datetime import datetime
 from modules import scan
 from utils import general
@@ -81,3 +81,28 @@ def threaded_functions(args2, functions):
         
     for t in threads:
         t.join()
+
+def start_background_tools():
+    smb_proc = subprocess.Popen(
+        ["impacket-smbserver", "-smb2support", "share", ".", "|", "tee" "logthisbitch"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        preexec_fn=os.setsid  # start in its own process group
+    )
+    
+    #needs sudo so this shit doesnt work....FUCK
+    #responder_proc = subprocess.Popen(
+    #    ["responder", "-I", "eth0", "-A"],
+    #    stdout=subprocess.DEVNULL,
+    #    stderr=subprocess.DEVNULL,
+    #    preexec_fn=os.setsid
+    #)
+
+    return smb_proc, #responder_proc <add this bitch back later once you figure out how to do sudo safely
+
+def stop_background_tools(*procs):
+    for proc in procs:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)  # kill the process group
+        except Exception as e:
+            print(f"[-] Failed to stop process {proc.pid}: {e}")
