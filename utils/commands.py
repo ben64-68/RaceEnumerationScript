@@ -41,6 +41,19 @@ def print_cmd(cmd, color):
     color_code = color_codes.get(color.lower(), "97")  # Default to white
     print(f"\033[{color_code}m[*] Running: {cmd}\033[0m")
     
+def TPI(cmd: str) -> bool:
+    print(f"\n\033[93m[?] TPI:{cmd}\033[0m\n")
+
+    while True:
+        choice = input("\033[94m[y/N]: \033[0m").strip().lower()
+        if choice in ("y", "yes"):
+            return True
+        elif choice in ("n", "no", ""):
+            print("\033[91m[-] Command rejected.\033[0m")
+            return False
+        else:
+            print("\033[91m[!] Invalid input. Enter 'y' or 'n'.\033[0m")
+
 def single_command(cmd, host_file, color):
     print_cmd(cmd, color)
     start = datetime.now()

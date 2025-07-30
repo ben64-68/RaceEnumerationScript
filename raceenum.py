@@ -1,6 +1,6 @@
 import argparse
 from modules import scan, ad
-from utils import general, commands
+from utils import general, commands,ldap_queries
 import threading
 
 #todos: mssql,sccm,check if got domain admin and secrets dump, stealth, add certipy account read for sid to make independent of bloodhound
@@ -56,6 +56,7 @@ def main():
     outscope = general.parse_ip_lines(args.outscope_file)
     processed = general.subtract_outscope(inscope, outscope)
     general.write_processed_ranges(processed, f"{args.proccessedIPs}")
+    ldap_queries.load_da_cache_from_file()
     
     #collect DC info
     if not args.dc_ip or not args.dc_hostname:
@@ -109,6 +110,8 @@ def main():
             scan.run_nmap_scans
         ]
         commands.threaded_functions(args, cmds)
+
+    ldap_queries.write_da_cache_to_file()
 
 if __name__ == "__main__":
     main()
