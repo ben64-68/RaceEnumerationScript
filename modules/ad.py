@@ -50,5 +50,19 @@ def run_ad_certipy(args):
             break
 
 def run_ad_bloodhound(args):
+    ad_bloodhound.start_bhce_server()
     ad_bloodhound.run_bloodhound_collection(args)
+
+    path = f"ActiveDirectory/Bloodhound"
+
+    token_key, token_id = None, None
+    with open(path, "r") as f:
+        for line in f:
+            if line.startswith("KEY:"):
+                token_key = line.split(":", 1)[1].strip()
+            elif line.startswith("ID:"):
+                token_id = line.split(":", 1)[1].strip()
+    zip_path = ad_bloodhound.zip_bloodhound_dir()
+
+    ad_bloodhound.upload_to_bloodhound(zip_path, token_key, token_id)
     

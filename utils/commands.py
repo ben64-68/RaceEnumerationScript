@@ -3,6 +3,8 @@ from datetime import datetime
 from modules import scan
 from utils import general
 
+password = "kali"
+
 def log_command(command, start_time, end_time, destination, status):
     duration = (end_time - start_time).total_seconds()
     username = getpass.getuser()
@@ -42,10 +44,10 @@ def print_cmd(cmd, color):
     print(f"\033[{color_code}m[*] Running: {cmd}\033[0m")
     
 def TPI(cmd: str) -> bool:
-    print(f"\n\033[93m[?] TPI:{cmd}\033[0m\n")
+    print(f"\n\033[97m[?] TPI:{cmd}\033[0m")
 
     while True:
-        choice = input("\033[94m[y/N]: \033[0m").strip().lower()
+        choice = input("\033[97m[y/N]: \033[0m").strip().lower()
         if choice in ("y", "yes"):
             return True
         elif choice in ("n", "no", ""):
@@ -89,16 +91,15 @@ def start_background_tools():
         stderr=subprocess.DEVNULL,
         preexec_fn=os.setsid  # start in its own process group
     )
-    
-    #needs sudo so this shit doesnt work....FUCK
+
+    #cmd = f"sudo responder -I eth0 -A"
     #responder_proc = subprocess.Popen(
-    #    ["responder", "-I", "eth0", "-A"],
+    #    cmd,
     #    stdout=subprocess.DEVNULL,
     #    stderr=subprocess.DEVNULL,
     #    preexec_fn=os.setsid
     #)
-
-    return smb_proc, #responder_proc <add this bitch back later once you figure out how to do sudo safely
+    return smb_proc #responder_proc
 
 def stop_background_tools(*procs):
     for proc in procs:
@@ -106,3 +107,21 @@ def stop_background_tools(*procs):
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)  # kill the process group
         except Exception as e:
             print(f"[-] Failed to stop process {proc.pid}: {e}")
+
+def run_as_root(command, password):
+    full_command = ['sudo', '-S'] + command
+    try:
+        result = subprocess.run(
+            full_command,
+            input=password + '\n',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(f"[!] Error:\n{result.stderr}")
+        return result.returncode
+    except Exception as e:
+        print(f"[-] Exception running command: {e}")
+        return -1

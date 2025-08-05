@@ -1,4 +1,4 @@
-import os, glob, shutil, subprocess
+import os, glob, shutil, subprocess, time, zipfile, http.client, json, mimetypes
 from datetime import datetime
 from utils import general, commands, ldap_queries
 
@@ -92,3 +92,46 @@ def get_user_sid(bh_dir, username):
     sid = result.stdout.strip()
     print(f"\033[92m[+] Found SID for '{username}': {sid}\033[0m")
     return sid
+
+def start_bhce_server():
+    cmd = "bloodhound-cli containers up"
+    print(f"[+] Starting BloodHound CE server: {cmd}")
+    proc = subprocess.Popen(cmd, shell=True)
+    return proc  # retain for later termination if needed
+
+def upload_to_bhce(token_id, token_key, zip_path, host="localhost", port=8080):
+    boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    headers = {
+        "Authorization": f"Bearer {token_id}:{token_key}",
+        "Content-Type": f"multipart/form-data; boundary={boundary}"
+    }
+
+    filename = os.path.basename(zip_path)
+    with open(zip_path, "rb") as f:
+        file_data = f.read()
+
+    body = (
+        f"--{boundary}\r\n"
+        f"Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+        f"Content-Type: application/zip\r\n\r\n"
+    ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
+
+    conn = http.client.HTTPConnection(host, port)
+    conn.request("POST", "/api/v2/ingest", body, headers)
+    res = conn.getresponse()
+    resp_data = res.read().decode()
+
+    print(f"[+] Upload response: {res.status} {res.reason}")
+    print(resp_data)
+    conn.close()
+
+def zip_bloodhound_dir(src_dir="ActiveDirectory/Bloodhound", output_file="ActiveDirectory/Bloodhound.zip"):
+    with zipfile.ZipFile(output_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(src_dir):
+            for file in files:
+                if file.endswith(".json"):
+                    full_path = os.path.join(root, file)
+                    arcname = os.path.relpath(full_path, src_dir)
+                    zipf.write(full_path, arcname)
+    print(f"[+] Zipped {src_dir} -> {output_file}")
+    return output_file

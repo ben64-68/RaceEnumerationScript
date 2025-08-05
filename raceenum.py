@@ -1,8 +1,9 @@
-import argparse
+import argparse, getpass
 from modules import scan, ad
 from utils import general, commands,ldap_queries
 import threading
 
+password = None
 #todos: mssql,sccm,check if got domain admin and secrets dump, stealth, add certipy account read for sid to make independent of bloodhound
 
 def main():
@@ -48,7 +49,7 @@ def main():
     
     if args.main_cmd == "clean":
         general.clean_all()
-
+    
     #general setup
     general.check_required_files(args.inscope_file, args.outscope_file)
     general.create_directories()
